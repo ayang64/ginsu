@@ -106,7 +106,7 @@ func (l *Lexer) peek() (rune, error) {
 // match() scans an io.RuneScanner and calls matchFunc() for every rune read.
 // this is the core of this package.
 //
-// matchFunc() returns two bools and an error:
+// matchFunc() returns two bools:
 //
 //  accept - the rune scanned should be placed in the resulting output string
 //  as part of the value associated with the token we're scanning.
@@ -150,10 +150,6 @@ func match(rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (string, error)
 func (l *Lexer) ScanUnidentified() (TokenType, string, error) {
 	s, err := match(l.rs, func(r rune) (bool, bool) {
 		v := r != '\n' && !unicode.IsSpace(r)
-		if !v {
-			return false, false
-		}
-
 		return v, v
 	})
 
@@ -193,20 +189,14 @@ func (l *Lexer) ScanQuotedString() (TokenType, string, error) {
 
 func (l *Lexer) ScanNewLine() (TokenType, string, error) {
 	s, err := match(l.rs, func(r rune) (bool, bool) {
-		if r == '\n' {
-			return true, false
-		}
-		return false, false
+		return r == '\n', false
 	})
 	return TokenNewLine, s, err
 }
 
 func (l *Lexer) ScanEqual() (TokenType, string, error) {
 	s, err := match(l.rs, func(r rune) (bool, bool) {
-		if r == '=' {
-			return true, false
-		}
-		return false, false
+		return r == '=', false
 	})
 	return TokenEqual, s, err
 }
@@ -214,9 +204,6 @@ func (l *Lexer) ScanEqual() (TokenType, string, error) {
 func (l *Lexer) ScanWhiteSpace() (TokenType, string, error) {
 	s, err := match(l.rs, func(r rune) (bool, bool) {
 		v := r != '\n' && unicode.IsSpace(r)
-		if !v {
-			return false, false
-		}
 		return v, v
 	})
 	return TokenWhiteSpace, s, err
