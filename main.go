@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"text/template"
@@ -12,6 +14,7 @@ import (
 func main() {
 	expr := flag.String("t", "{{.}}", "template to parse for each log line")
 	file := flag.String("f", "/dev/stdin", "path of file to parse")
+	verbose := flag.Bool("v", false, "verbose output")
 	output := flag.String("o", "/dev/stdout", "path to send output")
 	flag.Parse()
 
@@ -27,7 +30,13 @@ func main() {
 	}
 	defer outf.Close()
 
-	p, err := parse.NewParser(parse.WithReader(inf))
+	l := log.New(func() io.Writer {
+		if *verbose {
+			return os.Stdout
+		}
+		return ioutil.Discard
+	}(), "PARSE: ", log.LstdFlags)
+	p, err := parse.NewParser(parse.WithReader(inf), parse.WithLogger(l))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -41,6 +50,7 @@ func main() {
 		if len(m) == 0 {
 			continue
 		}
+		log.Printf("%v", m)
 		tmpl.Execute(outf, m)
 	}
 }
