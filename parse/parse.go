@@ -64,7 +64,7 @@ func (p *Parser) parse(ch chan map[string]interface{}) error {
 
 	kvp := map[string]interface{}{}
 	for tok := range lexer.Lex() {
-		if tok.Type == lex.TokenWhiteSpace || tok.Type == lex.TokenUnidentified {
+		if tok.Type == lex.TokenWhiteSpace {
 			continue // skip white space and unknown tokens.
 		}
 
@@ -72,9 +72,9 @@ func (p *Parser) parse(ch chan map[string]interface{}) error {
 		p.log.Printf("tokens: %v", tokens)
 
 		// look at the last three tokens
-		if len(tokens) > 2 {
+		if len(tokens) >= 3 {
 			cur := tokens[len(tokens)-3:]
-			p.log.Printf("TOP THREE TOKENS: %v", cur)
+			p.log.Printf(">>> TOP THREE TOKENS: %v", cur)
 			// basically this is:
 			//
 			// kvp := ATOM '=' value
@@ -85,19 +85,20 @@ func (p *Parser) parse(ch chan map[string]interface{}) error {
 			//
 			// but way uglier.
 			//
-			if cur[0].Type == lex.TokenAtom && cur[1].Type == lex.TokenEqual && (cur[2].Type == lex.TokenQuotedString || cur[2].Type == lex.TokenAtom) {
+			if cur[0].Type == lex.TokenAtom && cur[1].Type == lex.TokenEqual && cur[2].Type == lex.TokenAtom {
 				kvp[cur[0].Value.(string)] = cur[2].Value
 				// shift token slice
 				p.log.Printf("reducing tokens after parsing a key/value pair")
 				p.log.Printf("kvp is now %#v", kvp)
-				tokens = tokens[:len(tokens)-3]
+				tokens = tokens[:0]
 				continue
 			}
-		} else if len(tokens) > 1 {
+		}
+		if len(tokens) > 0 {
 			cur := tokens[len(tokens)-1:]
 			if cur[0].Type == lex.TokenNewLine {
 				// we've reached the end of the line
-				p.log.Printf("kvp = %#v", kvp)
+				p.log.Printf("SENDING KVP TO CALLER: %#v", kvp)
 				ch <- kvp
 				kvp = map[string]interface{}{}
 				p.log.Printf("reducing tokens after parsing a newline")
@@ -107,8 +108,8 @@ func (p *Parser) parse(ch chan map[string]interface{}) error {
 		}
 
 		// if we're here, we should probably shift the tokens by 3
-		if len(tokens) > 3 {
-			tokens = tokens[len(tokens)-3:]
+		if len(tokens) > 2 {
+			tokens = tokens[len(tokens)-2:]
 		}
 
 	}

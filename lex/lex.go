@@ -119,10 +119,16 @@ func (l *Lexer) peek() (rune, error) {
 //  accept the quote rune as part of the value of the token (so accept will be
 //  false).
 //
+//  error - indicates that we should break out of the loop AND place the most
+//  recently scanned rune back into the stream.  this is distinct from
+//  !continue since since it is possible to ask to not continue and not to
+//  accept a rune without Unread()ing a rune.  The end quote character in a
+//  quoted string is an example case.
+//
 // typically it is easiest to supply matchFunc() as a function literal so we
 // can maintain state outside of the matchFunc().
 //
-func match(rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (string, error) {
+func (l *Lexer) match(rs io.RuneScanner, matchFunc func(rune) (bool, bool, error)) (string, error) {
 	lexeme := &strings.Builder{}
 	var matchErr error
 	for {
@@ -132,30 +138,35 @@ func match(rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (string, error)
 			break
 		}
 
-		accept, cont := matchFunc(r)
+		accept, cont, err := matchFunc(r)
 		if accept {
 			lexeme.WriteRune(r)
 		}
 
+		if err != nil {
+			rs.UnreadRune()
+			break
+		}
+
 		if !cont {
-			if !accept {
-				rs.UnreadRune()
-			}
 			break
 		}
 	}
 	return lexeme.String(), matchErr
 }
 
-func matchToken(t TokenType, rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (TokenType, string, error) {
-	s, err := match(rs, matchFunc)
+func (l *Lexer) matchToken(t TokenType, rs io.RuneScanner, matchFunc func(rune) (bool, bool, error)) (TokenType, string, error) {
+	s, err := l.match(rs, matchFunc)
 	return t, s, err
 }
 
 func (l *Lexer) ScanUnidentified() (TokenType, string, error) {
-	return matchToken(TokenUnidentified, l.rs, func(r rune) (bool, bool) {
+	return l.matchToken(TokenUnidentified, l.rs, func(r rune) (bool, bool, error) {
 		v := r != '\n' && !unicode.IsSpace(r)
-		return v, v
+		if !v {
+			return v, v, fmt.Errorf("%c is not part of an unidentified")
+		}
+		return v, v, nil
 	})
 }
 
@@ -163,77 +174,101 @@ func (l *Lexer) ScanQuotedString() (TokenType, string, error) {
 	count := 0
 	var endQuote rune
 	var escaped bool
-	return matchToken(TokenQuotedString, l.rs, func(r rune) (bool, bool) {
+	return l.matchToken(TokenAtom, l.rs, func(r rune) (bool, bool, error) {
 		count++
 		if escaped {
 			escaped = false
-			return true, true
+			return true, true, nil
 		}
 
 		if count == 1 && (r == '"' || r == '\'') {
+			if r == '"' {
+				l.log.Printf("HANDLING DOUBLE QUOTED STRING")
+			} else {
+				l.log.Printf("HANDLING SINGLE QUOTED STRING")
+			}
 			endQuote = r
 			// don't accept this rune but continue without error
-			return false, true
+			return false, true, nil
 		}
 
 		// if it is an escape sentinel, continue but don't accept it
 		if r == '\\' && !escaped {
 			escaped = true
-			return false, true
+			return false, true, nil
 		}
 
 		if r == endQuote {
-			return false, false
+			l.log.Printf("GOT ENDING QUOTE RUNE (%c)", r)
+			return false, false, nil
 		}
-		return true, true
+		return true, true, nil
 	})
 }
 
 func (l *Lexer) ScanNewLine() (TokenType, string, error) {
-	return matchToken(TokenNewLine, l.rs, func(r rune) (bool, bool) {
-		return r == '\n', false
+	return l.matchToken(TokenNewLine, l.rs, func(r rune) (bool, bool, error) {
+		v := r == '\n'
+		if !v {
+			return v, false, fmt.Errorf("did not scan a newline")
+		}
+		return v, v, nil
 	})
 }
 
 func (l *Lexer) ScanEqual() (TokenType, string, error) {
-	return matchToken(TokenEqual, l.rs, func(r rune) (bool, bool) {
-		return r == '=', false
+	return l.matchToken(TokenEqual, l.rs, func(r rune) (bool, bool, error) {
+		v := r == '='
+		if !v {
+			return v, v, fmt.Errorf("did not scan an equal sign")
+		}
+		return v, v, nil
+
 	})
 }
 
 func (l *Lexer) ScanWhiteSpace() (TokenType, string, error) {
-	return matchToken(TokenWhiteSpace, l.rs, func(r rune) (bool, bool) {
+	return l.matchToken(TokenWhiteSpace, l.rs, func(r rune) (bool, bool, error) {
 		v := r != '\n' && unicode.IsSpace(r)
-		return v, v
+		if !v {
+			return v, v, fmt.Errorf("%c is not a whitespace charater", r)
+		}
+		return v, v, nil
 	})
 }
 
+func atomClass(r rune) bool {
+	return r != '\n' && r != '=' && unicode.IsPrint(r) && !unicode.IsSpace(r)
+}
+
 func (l *Lexer) ScanAtom() (TokenType, string, error) {
-	count := 0
-	return matchToken(TokenAtom, l.rs, func(r rune) (bool, bool) {
-		count++
-		v := (count == 1 && unicode.IsLetter(r)) || (count > 1 && (unicode.IsLetter(r) || unicode.IsPunct(r) || unicode.IsDigit(r)))
-		return v, v
+	return l.matchToken(TokenAtom, l.rs, func(r rune) (bool, bool, error) {
+		v := atomClass(r)
+		if !v {
+			return v, v, fmt.Errorf("%c is not in the atom class", r)
+		}
+		return v, v, nil
 	})
 }
 
 func (l *Lexer) scan() (*Token, error) {
 	classify := func() (TokenType, string, error) {
 		r, err := l.peek()
+		l.log.Printf("PEEKED AT %[1]c (%[1]d)", r)
 		if err != nil {
 			return TokenError, err.Error(), err
 		}
 		switch {
+		case unicode.IsSpace(r) && r != '\n':
+			return l.ScanWhiteSpace()
 		case r == '\n':
 			return l.ScanNewLine()
 		case r == '\'' || r == '"':
 			return l.ScanQuotedString()
-		case unicode.IsSpace(r):
-			return l.ScanWhiteSpace()
-		case unicode.IsLetter(r):
-			return l.ScanAtom()
 		case r == '=':
 			return l.ScanEqual()
+		case atomClass(r):
+			return l.ScanAtom()
 		default:
 			return l.ScanUnidentified()
 		}

@@ -15,7 +15,7 @@ func main() {
 	expr := flag.String("t", "{{.}}", "template to parse for each log line")
 	file := flag.String("f", "/dev/stdin", "path of file to parse")
 	verbose := flag.Bool("v", false, "verbose output")
-	output := flag.String("o", "/dev/stdout", "path to send output")
+	output := flag.String("o", "", "path to send output")
 	flag.Parse()
 
 	inf, err := os.Open(*file)
@@ -24,11 +24,22 @@ func main() {
 	}
 	defer inf.Close()
 
-	outf, err := os.OpenFile(*output, os.O_CREATE, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer outf.Close()
+	outf := func() io.Writer {
+		if *output != "" {
+			outf, err := os.OpenFile(*output, os.O_CREATE, 0644)
+			if err != nil {
+				log.Fatal(err)
+			}
+			return outf
+		}
+		return os.Stdout
+	}()
+
+	defer func() {
+		if closer, ok := outf.(io.Closer); ok {
+			closer.Close()
+		}
+	}()
 
 	l := log.New(func() io.Writer {
 		if *verbose {
@@ -50,7 +61,6 @@ func main() {
 		if len(m) == 0 {
 			continue
 		}
-		log.Printf("%v", m)
-		tmpl.Execute(outf, m)
+		tmpl.Execute(os.Stdout, m)
 	}
 }
