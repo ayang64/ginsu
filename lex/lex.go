@@ -147,20 +147,23 @@ func match(rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (string, error)
 	return sb.String(), matchErr
 }
 
+func matchToken(t TokenType, rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (TokenType, string, error) {
+	s, err := match(rs, matchFunc)
+	return t, s, err
+}
+
 func (l *Lexer) ScanUnidentified() (TokenType, string, error) {
-	s, err := match(l.rs, func(r rune) (bool, bool) {
+	return matchToken(TokenUnidentified, l.rs, func(r rune) (bool, bool) {
 		v := r != '\n' && !unicode.IsSpace(r)
 		return v, v
 	})
-
-	return TokenUnidentified, s, err
 }
 
 func (l *Lexer) ScanQuotedString() (TokenType, string, error) {
 	count := 0
 	var endQuote rune
 	var escaped bool
-	s, err := match(l.rs, func(r rune) (bool, bool) {
+	return matchToken(TokenQuotedString, l.rs, func(r rune) (bool, bool) {
 		count++
 		if escaped {
 			escaped = false
@@ -184,39 +187,34 @@ func (l *Lexer) ScanQuotedString() (TokenType, string, error) {
 		}
 		return true, true
 	})
-	return TokenQuotedString, s, err
 }
 
 func (l *Lexer) ScanNewLine() (TokenType, string, error) {
-	s, err := match(l.rs, func(r rune) (bool, bool) {
+	return matchToken(TokenNewLine, l.rs, func(r rune) (bool, bool) {
 		return r == '\n', false
 	})
-	return TokenNewLine, s, err
 }
 
 func (l *Lexer) ScanEqual() (TokenType, string, error) {
-	s, err := match(l.rs, func(r rune) (bool, bool) {
+	return matchToken(TokenEqual, l.rs, func(r rune) (bool, bool) {
 		return r == '=', false
 	})
-	return TokenEqual, s, err
 }
 
 func (l *Lexer) ScanWhiteSpace() (TokenType, string, error) {
-	s, err := match(l.rs, func(r rune) (bool, bool) {
+	return matchToken(TokenWhiteSpace, l.rs, func(r rune) (bool, bool) {
 		v := r != '\n' && unicode.IsSpace(r)
 		return v, v
 	})
-	return TokenWhiteSpace, s, err
 }
 
 func (l *Lexer) ScanAtom() (TokenType, string, error) {
 	count := 0
-	s, err := match(l.rs, func(r rune) (bool, bool) {
+	return matchToken(TokenAtom, l.rs, func(r rune) (bool, bool) {
 		count++
 		v := (count == 1 && unicode.IsLetter(r)) || (count > 1 && (unicode.IsLetter(r) || unicode.IsPunct(r) || unicode.IsDigit(r)))
 		return v, v
 	})
-	return TokenAtom, s, err
 }
 
 func (l *Lexer) scan() (*Token, error) {
