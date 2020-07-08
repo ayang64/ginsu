@@ -123,7 +123,7 @@ func (l *Lexer) peek() (rune, error) {
 // can maintain state outside of the matchFunc().
 //
 func match(rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (string, error) {
-	sb := &strings.Builder{}
+	lexeme := &strings.Builder{}
 	var matchErr error
 	for {
 		r, _, err := rs.ReadRune()
@@ -134,7 +134,7 @@ func match(rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (string, error)
 
 		accept, cont := matchFunc(r)
 		if accept {
-			sb.WriteRune(r)
+			lexeme.WriteRune(r)
 		}
 
 		if !cont {
@@ -144,7 +144,7 @@ func match(rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (string, error)
 			break
 		}
 	}
-	return sb.String(), matchErr
+	return lexeme.String(), matchErr
 }
 
 func matchToken(t TokenType, rs io.RuneScanner, matchFunc func(rune) (bool, bool)) (TokenType, string, error) {
