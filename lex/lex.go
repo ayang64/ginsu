@@ -25,26 +25,20 @@ const (
 )
 
 func (t TokenType) String() string {
-	switch t {
-	case TokenAtom:
-		return "ATOM"
-	case TokenEqual:
-		return "EQUAL"
-	case TokenError:
-		return "ERROR"
-	case TokenNewLine:
-		return "NEWLINE"
-	case TokenNumber:
-		return "NUMBER"
-	case TokenQuotedString:
-		return "QUOTED-STRING"
-	case TokenUnidentified:
-		return "UNIDENTIFIED"
-	case TokenWhiteSpace:
-		return "WHITE-SPACE"
-	default:
-		return fmt.Sprintf("UNKNOWN-%d", t)
+	m := map[TokenType]string{
+		TokenAtom:         "ATOM",
+		TokenEqual:        "EQUAL",
+		TokenError:        "ERROR",
+		TokenNewLine:      "NEWLINE",
+		TokenNumber:       "NUMBER",
+		TokenQuotedString: "QUOTED-STRING",
+		TokenUnidentified: "UNIDENTIFIED",
+		TokenWhiteSpace:   "WHITE-SPACE",
 	}
+	if s, ok := m[t]; ok {
+		return s
+	}
+	return "UNKNOWN"
 }
 
 type Token struct {
@@ -164,7 +158,7 @@ func (l *Lexer) ScanUnidentified() (TokenType, string, error) {
 	return l.matchToken(TokenUnidentified, l.rs, func(r rune) (bool, bool, error) {
 		v := r != '\n' && !unicode.IsSpace(r)
 		if !v {
-			return v, v, fmt.Errorf("%c is not part of an unidentified")
+			return v, v, fmt.Errorf("%c is not part of an unidentified", r)
 		}
 		return v, v, nil
 	})
