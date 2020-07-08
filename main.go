@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"runtime/pprof"
+	"runtime/trace"
 	"text/template"
 
 	"github.com/ayang64/ginsu/parse"
@@ -16,7 +18,42 @@ func main() {
 	file := flag.String("f", "/dev/stdin", "path of file to parse")
 	verbose := flag.Bool("v", false, "verbose output")
 	output := flag.String("o", "/dev/stdout", "path to send output")
+	cpuprofile := flag.String("cpuprofile", "", "path to cpu profile")
+	memprofile := flag.String("memprofile", "", "path to memory profile")
+	tracefile := flag.String("trace", "", "path to trace file")
 	flag.Parse()
+
+	if *memprofile != "" {
+		outf, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer outf.Close()
+
+		defer pprof.WriteHeapProfile(outf)
+	}
+
+	if *tracefile != "" {
+		outf, err := os.Create(*tracefile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer outf.Close()
+
+		trace.Start(outf)
+		defer trace.Stop()
+	}
+
+	if *cpuprofile != "" {
+		outf, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer outf.Close()
+
+		pprof.StartCPUProfile(outf)
+		defer pprof.StopCPUProfile()
+	}
 
 	inf, err := os.Open(*file)
 	if err != nil {
@@ -55,4 +92,5 @@ func main() {
 		}
 		tmpl.Execute(os.Stdout, m)
 	}
+
 }

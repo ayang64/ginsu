@@ -96,15 +96,20 @@ func (p *Parser) parse(ch chan map[string]interface{}) error {
 		}
 		if len(tokens) > 0 {
 			cur := tokens[len(tokens)-1:]
-			if cur[0].Type == lex.TokenNewLine {
+			if curType := cur[0].Type; curType == lex.TokenNewLine || curType == lex.TokenError {
 				// we've reached the end of the line
 				p.log.Printf("SENDING KVP TO CALLER: %#v", kvp)
 				ch <- kvp
 				kvp = map[string]interface{}{}
 				p.log.Printf("reducing tokens after parsing a newline")
 				tokens = tokens[:len(tokens)-1]
+
+				if curType == lex.TokenError {
+					break
+				}
 				continue
 			}
+
 		}
 
 		// if we're here, we should probably shift the tokens by 3
