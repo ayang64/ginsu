@@ -192,7 +192,7 @@ func (l *Lexer) ScanQuotedString() (TokenType, string, error) {
 			return false, true, nil
 		}
 
-		if r == endQuote {
+		if r == endQuote || r == '\n' {
 			l.log.Printf("GOT ENDING QUOTE RUNE (%c)", r)
 			return false, false, nil
 		}
