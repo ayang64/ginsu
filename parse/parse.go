@@ -112,12 +112,15 @@ func (p *Parser) parse(ch chan map[string]interface{}) error {
 
 		}
 
-		// if we're here, we should probably shift the tokens by 3
-		if len(tokens) > 2 {
-			tokens = tokens[len(tokens)-2:]
+		// if we're here, we should probably shift the tokens by 2
+		shift := func() int {
+			if len(tokens) > 2 {
+				return 2
+			}
+			return 0
 		}
 
+		tokens = tokens[len(tokens)-shift():]
 	}
-
 	return nil
 }
